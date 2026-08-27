@@ -20,13 +20,14 @@ INTERNAL = '--internal' in sys.argv
 # ---------------------------------------------------------------------------
 # Provider and curriculum assignments in the PUBLIC build.
 #
-# These were withheld from the public file while approval to share them was
-# outstanding. NYCPS has since asked for the provider and curriculum view to be
-# available to its own staff, and Anurag directed on 17 August 2026 that it be
-# visible in the public build. Set this back to False to restore the split, and
-# the stripping logic below comes back with it.
+# Withheld from the public file. Briefly published on 17 August 2026 at NYCPS's
+# request, then withdrawn again on 21 August 2026. Note that hiding the page is
+# only half the control: the assignments also live in data/payload.json and the
+# two vendor JSONs, which are why those files are gitignored rather than
+# committed. A public build with the page stripped and the payload committed
+# would leak the same data through the repository.
 # ---------------------------------------------------------------------------
-PUBLIC_INCLUDES_VENDORS = True
+PUBLIC_INCLUDES_VENDORS = False
 
 tpl   = open(os.path.join(R,'src/template.html')).read()
 app   = open(os.path.join(R,'src/app.js')).read()

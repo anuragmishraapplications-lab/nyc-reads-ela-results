@@ -924,9 +924,6 @@ function initDI(){
   multiSelect('di-ms-dist', 'Districts',
     D.districts.map((d,i) => ({ v:String(i), t:`District ${d} · ${D.districtBoro[i]}` })),
     renderDI, 'All 32 districts');
-  fill($('di-focus-sel'), [{v:'',t:'All districts (comparison view)'}]
-    .concat(D.districts.map((d,i)=>({ v:i, t:`District ${d} · ${D.districtBoro[i]}` }))));
-  on($('di-focus-sel'), renderDI);
   buildDIAssignmentPickers();
   on($('di-dim'), () => { fillCats($('di-dim'), $('di-cat')); renderDI(); });
   on($('di-grade'), () => {   /* the assignment fields follow the grade band */
@@ -937,7 +934,6 @@ function initDI(){
   ['di-base','di-cat','di-metric'].forEach(id => on($(id), renderDI));
   $('di-reset').onclick = () => {
     ['di-ms-dist','di-ms-boro','di-ms-phase','di-ms-reads','di-ms-curr'].forEach(k => msSel(k).clear());
-    $('di-focus-sel').value = '';
     initDI(); renderDI();
   };
 }
@@ -951,6 +947,16 @@ function buildDIAssignmentPickers(){
   multiSelect('di-ms-curr', `${lbl} curriculum`,
     currRoster(bk).map(c => ({ v:c, t:c, n: ALL_DIST.filter(i=>currFor(i,bk).includes(c)).length })),
     renderDI, 'All curricula');
+}
+
+/* Exactly one district ticked in the Districts filter means "show me this
+   one"; anything else means the comparison view. Returns a district index or
+   null. */
+function diFocusIndex(){
+  const sel = msSel('di-ms-dist');
+  if (sel.size !== 1) return null;
+  const i = +[...sel][0];
+  return Number.isInteger(i) && i >= 0 && i < D.districts.length ? i : null;
 }
 
 function diRows(){
@@ -1010,11 +1016,11 @@ function signal(r){
 function renderDISubgroups(rows, base, bk){
   const dimKey = $('di-sg-dim').value;
   const dim = D.dims.find(d => d.k === dimKey) || D.dims[1];
-  const fsel = $('di-focus-sel').value;
-  const geos = fsel === '' ? rows.map(r => r.i) : [+fsel];
-  const where = fsel === ''
+  const focusIdx = diFocusIndex();
+  const geos = focusIdx == null ? rows.map(r => r.i) : [focusIdx];
+  const where = focusIdx == null
     ? (geos.length === 32 ? 'all 32 districts' : `${geos.length} district${geos.length===1?'':'s'}`)
-    : `District ${D.districts[+fsel]}`;
+    : `District ${D.districts[focusIdx]}`;
   const bl = band(bk).label.toLowerCase();
 
   $('di-sg-title').textContent = `${dim.label}: proficiency and change, ${where}`;
@@ -1128,9 +1134,12 @@ function renderDI(){
     kpi('Improved on both', `${nGG}`, `/${valid.length}`, null, best?`Largest proficiency gain: District ${D.districts[best.i]} (${pp(best.dprof)}pp)`:'', nGG>valid.length/2?'g':'n'),
   ].join('');
 
-  const fsel = $('di-focus-sel').value;
-  renderFocus('di', 'dist', fsel==='' ? null : +fsel,
-              fsel==='' ? '' : `District ${D.districts[+fsel]}`,
+  /* The separate Focus control is gone. Ticking exactly one district in the
+     Districts filter is the same intent expressed once, so that drives the
+     detail panel; two or more, or none, means the comparison view. */
+  const focusIdx = diFocusIndex();
+  renderFocus('di', 'dist', focusIdx,
+              focusIdx==null ? '' : `District ${D.districts[focusIdx]}`,
               $('di-grade').value, +$('di-cat').value, base);
 
   activeBar('di-active', 'di', 32, `${rows.length} of 32 districts`);
@@ -2305,10 +2314,9 @@ $('buildstamp').textContent = `Built ${BUILD}.`;
    The provider and curriculum line is marked pending until NYCPS confirms it
    may be shared; VENDOR_APPROVED flips that.
    --------------------------------------------------------------------- */
-/* NYCPS asked for the provider and curriculum view for its own staff, and
-   the assignments are now published in the public build, so the pending
-   note is retired. Flip to false to bring it back. */
-const VENDOR_APPROVED = true;
+/* The provider and curriculum assignments are withheld from the public build
+   again as of 21 August 2026, so the pending-approval note returns with them. */
+const VENDOR_APPROVED = false;
 const INFOHUB_URL = 'https://infohub.nyced.org/reports/academics/test-results';
 
 /* ---------------------------------------------------------------------

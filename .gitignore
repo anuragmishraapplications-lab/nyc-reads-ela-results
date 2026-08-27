@@ -5,9 +5,17 @@ __pycache__/
 data/school-ela-results-public.xlsx
 data/private/
 email_reply*.md
+email_to_send.md
 QC.md
 .preview/
 .claude/launch.json
 NYC_Reads_ELA_Dashboard_INTERNAL.html
 !audit/states.json
 !audit/states2.json
+
+# The provider and curriculum assignments live in these three. payload.json is a
+# build artefact regenerable by extract.py; the vendor JSONs are source data.
+# None of them may be committed while the public build withholds the page.
+data/payload.json
+data/vendors_raw.json
+data/vendors_sy2025_26.json

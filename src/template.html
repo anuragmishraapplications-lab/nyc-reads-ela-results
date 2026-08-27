@@ -286,14 +286,13 @@ dl.defs dd{margin-left:0;color:#41505C}
   <div class="ph"><div>
     <div class="eyebrow">Community school districts</div>
     <div class="pt">District explorer</div>
-    <div class="pst">Choose a district under Focus to see its own results first, or leave it on all districts to compare across them. Filters combine: adding a second filter narrows the set. Any column can be sorted. The underlying results files can be downloaded from the <a href="https://infohub.nyced.org/reports/academics/test-results" target="_blank" rel="noopener">NYCPS InfoHub</a>.</div>
+    <div class="pst">Use the Districts filter to pick one district or several; leave it clear to compare across all 32. Selecting a single district also opens a detail panel for it. Filters combine: adding a second filter narrows the set. Any column can be sorted. The underlying results files can be downloaded from the <a href="https://infohub.nyced.org/reports/academics/test-results" target="_blank" rel="noopener">NYCPS InfoHub</a>.</div>
   </div></div>
 
   <div class="fb">
     <div class="fg"><span class="fl">Baseline</span><select id="di-base"></select></div>
     <div class="fg"><span class="fl">Grades</span><select id="di-grade"></select></div>
     <div class="fg"><span class="fl">Group</span><select id="di-dim"></select><select id="di-cat"></select></div>
-    <div class="fg"><span class="fl">Focus</span><select id="di-focus-sel"></select></div>
     <div class="fg"><span class="fl">Districts</span><div id="di-ms-dist"></div></div>
     <div class="fg"><span class="fl">Borough</span><div id="di-ms-boro"></div></div>
     <div class="fg"><span class="fl">Phase</span><div id="di-ms-phase"></div></div>
@@ -327,15 +326,6 @@ dl.defs dd{margin-left:0;color:#41505C}
       </div>
     </div>
   </div>
-  <div class="cd" id="di-sg-wrap">
-    <div class="cdh"><div><div class="ct" id="di-sg-title"></div>
-      <div class="cs" id="di-sg-sub"></div></div>
-      <div style="display:flex;gap:8px;align-items:center"><select id="di-sg-dim"></select><button class="btn gh" data-png="di-sg">PNG</button></div></div>
-    <div class="cc lg" id="wrap-di-sg"><canvas id="di-sg"></canvas></div>
-    <div id="di-sg-supp"></div>
-    <div class="tw" style="margin-top:16px"><table id="di-sg-table"></table></div>
-  </div>
-
   <div id="di-active"></div>
   <div id="di-nc"></div>
   <div class="note info" id="di-insight"></div>
@@ -361,6 +351,15 @@ dl.defs dd{margin-left:0;color:#41505C}
         <div style="display:flex;gap:8px"><select id="di-metric"></select><button class="btn gh" data-png="di-rank">PNG</button></div></div>
       <div class="cc lg" id="wrap-di-rank"><canvas id="di-rank"></canvas></div>
     </div>
+  </div>
+
+  <div class="cd" id="di-sg-wrap">
+    <div class="cdh"><div><div class="ct" id="di-sg-title"></div>
+      <div class="cs" id="di-sg-sub"></div></div>
+      <div style="display:flex;gap:8px;align-items:center"><select id="di-sg-dim"></select><button class="btn gh" data-png="di-sg">PNG</button></div></div>
+    <div class="cc lg" id="wrap-di-sg"><canvas id="di-sg"></canvas></div>
+    <div id="di-sg-supp"></div>
+    <div class="tw" style="margin-top:16px"><table id="di-sg-table"></table></div>
   </div>
 
   <div class="cd" id="di-cohort-wrap">
