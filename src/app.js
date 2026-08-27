@@ -143,6 +143,12 @@ const VE_FIELDS = {
   msc: { label:'Grades 6–8 curriculum', roster:()=>V.msCurrRoster, get:msCurr, band:'68' },
 };
 const distsWith = (fk, v) => ALL_DIST.filter(i => VE_FIELDS[fk].get(i) === v);
+/* A build may carry curriculum without providers, or the reverse. An empty
+   roster is the signal that the field is not in this file at all, so every
+   control that offers it drops out rather than rendering an empty picker. */
+const hasField = fk => (VE_FIELDS[fk].roster() || []).length > 0;
+const HAS_JESP = () => hasField('k5j') || hasField('msj');
+const HAS_CURR = () => hasField('k5c') || hasField('msc');
 
 /* ---------------------------------------------------------------------
    Grade bands are governed by different assignments. The K-5 curriculum and
@@ -545,6 +551,15 @@ function multiSelect(id, label, items, onChange, allText){
 document.addEventListener('click', () =>
   document.querySelectorAll('.ms-pop').forEach(p => p.hidden = true));
 const msSel = id => MS_STATE[id] || new Set();
+/* Remove a filter and its label from the bar when the build does not carry
+   that field. Clears any selection first, so a hidden control can never go on
+   silently narrowing the view. */
+function hideIfAbsent(id, present){
+  const host = $(id); if (!host) return;
+  const group = host.closest('.fg') || host;
+  group.style.display = present ? '' : 'none';
+  if (!present) msSel(id).clear();
+}
 /* a control with nothing ticked does not restrict anything */
 const msPass = (id, values) => { const s = msSel(id);
   if (!s.size) return true;
@@ -938,10 +953,12 @@ function initDI(){
   };
 }
 function buildDIAssignmentPickers(){
-  if (!HAS_VENDORS) return;                 // public build carries no assignments
+  if (!HAS_VENDORS) return;                 // build carries no assignments at all
   const bk = $('di-grade').value, sc = scopeOf(bk);
   const lbl = sc==='k5' ? 'K–5' : sc==='ms' ? 'Grades 6–8' : 'Any';
-  multiSelect('di-ms-reads', `${lbl} provider (JESP)`,
+  hideIfAbsent('di-ms-reads', HAS_JESP());
+  hideIfAbsent('di-ms-curr',  HAS_CURR());
+  if (HAS_JESP()) multiSelect('di-ms-reads', `${lbl} provider (JESP)`,
     jespRoster(bk).map(v => ({ v, t:v, n: ALL_DIST.filter(i=>jespFor(i,bk).includes(v)).length })),
     renderDI, 'All providers');
   multiSelect('di-ms-curr', `${lbl} curriculum`,
@@ -1396,7 +1413,9 @@ function initBO(){
     { v:'ms1',   t:'Middle school Phase 1 · SY 2025–26', n:D.phase.ms1.length },
     { v:'ms2',   t:'Middle school Phase 2 · SY 2026–27', n:D.phase.ms2.length },
   ], renderBO, 'All phases');
-  multiSelect('bo-ms-reads', 'K–5 provider (JESP)',
+  hideIfAbsent('bo-ms-reads', HAS_JESP());
+  hideIfAbsent('bo-ms-curr',  HAS_CURR());
+  if (HAS_JESP()) multiSelect('bo-ms-reads', 'K–5 provider (JESP)',
     V.k5JespRoster.map(v => ({ v, t:v, n: distsWith('k5j',v).length })), renderBO, 'All providers');
   multiSelect('bo-ms-curr', 'K–5 curriculum',
     V.k5CurrRoster.map(c => ({ v:c, t:c, n: distsWith('k5c',c).length })), renderBO, 'All curricula');
@@ -1858,7 +1877,9 @@ function renderTF(){
 function initVE(){
   fillBaselines($('ve-base')); fillDims($('ve-dim')); fillCats($('ve-dim'), $('ve-cat'));
   fillMetrics($('ve-metric'), ['prof','l1','l4','mean'], 'prof');
-  fill($('ve-group'), Object.entries(VE_FIELDS).map(([k,f]) => ({ v:k, t:f.label })), 'k5j');
+  const groupFields = Object.entries(VE_FIELDS).filter(([k]) => hasField(k));
+  fill($('ve-group'), groupFields.map(([k,f]) => ({ v:k, t:f.label })),
+       groupFields.length ? groupFields[0][0] : '');
   fill($('ve-band'), [
     { v:'35',  t:'Grades 3–5 (reached by the K–5 curriculum)' },
     { v:'all', t:'All grades (3–8)' },
@@ -1885,7 +1906,26 @@ function initVE(){
       <td style="white-space:normal">${ds.length
         ? ds.map(i=>`<span class="chip">D${D.districts[i]}</span>`).join('')
         : '<span class="muted">No district in the ELA files</span>'}</td></tr>`;
-  $('ve-roster').innerHTML =
+  /* The provider roster is only meaningful in a build that carries providers.
+     Where it does not, the card is removed rather than left as an empty table,
+     and the page presents itself as a curriculum page. */
+  const jesp = HAS_JESP();
+  /* nav entry and the comparison caveat follow the same fact */
+  const navVE = document.querySelector('.ni[data-p="ve"]');
+  if (navVE) navVE.lastChild.textContent = jesp ? 'Providers & curriculum' : 'Curriculum';
+  const warn = $('ve-warn');
+  if (warn) warn.innerHTML = jesp
+    ? `<b>These groups were not formed for comparison.</b> Districts were not assigned to providers or curricula at random and did not start from the same place, group sizes are very uneven, and several districts work with more than one provider. Differences between groups describe the districts in them; they do not measure provider or curriculum effectiveness.`
+    : `<b>These groups were not formed for comparison.</b> Districts did not choose their curriculum at random and did not start from the same place, and group sizes are very uneven. Differences between groups describe the districts in them; they do not measure curriculum effectiveness.`;
+  const rosterCard = $('ve-roster-card');
+  if (rosterCard) rosterCard.style.display = jesp ? '' : 'none';
+  $('ve-title').textContent = jesp
+    ? 'Professional learning providers and curriculum'
+    : 'Curriculum';
+  $('ve-sub').innerHTML = jesp
+    ? `Districts grouped by the NYC Reads professional learning provider (JESP) they worked with and by the curriculum they adopted in <b>school year 2025&ndash;26</b>, the year the spring 2026 test measures. K&ndash;5 and grades 6&ndash;8 assignments are held separately because they differ.`
+    : `Districts grouped by the curriculum they adopted in <b>school year 2025&ndash;26</b>, the year the spring 2026 test measures. K&ndash;5 and grades 6&ndash;8 adoptions are held separately because they differ. Professional learning provider assignments are not included in this version.`;
+  if (jesp) $('ve-roster').innerHTML =
     `<thead><tr><th class="nos">K–5 provider (JESP)</th><th class="nos"># of districts</th><th class="nos">Districts</th></tr></thead><tbody>`
     + V.k5JespRoster.map(v => row(v, distsWith('k5j',v))).join('') + `</tbody>`;
   $('ve-roster2').innerHTML =
