@@ -43,7 +43,7 @@ chart = open(os.path.join(R,'vendor/chart.umd.min.js')).read()
 logo_nycreads = open(os.path.join(R,'data/nycreads_logo_b64.txt')).read().strip()
 logo_cprl     = open(os.path.join(R,'data/cprl_formal_b64.txt')).read().strip()
 payload_obj   = json.load(open(os.path.join(R,'data/payload.json')))
-build = datetime.date(2026,8,17).strftime('%-d %B %Y')
+build = datetime.date(2026,10,2).strftime('%-d %B %Y')
 
 if not INTERNAL:
     v = payload_obj.get('vendors')
