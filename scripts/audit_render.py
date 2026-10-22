@@ -141,7 +141,7 @@ for e in REN:
             cmp(f'di mean {d} {e["st"]}', row[H['Mean score']], f1(cur['mean']) if cur else 's')
             if comparable:
                 dl1=cur['l1']-bse['l1']; dpr=cur['prof']-bse['prof']
-                sig='Improved on both' if dl1<0 and dpr>0 else 'Mixed' if dl1<0 or dpr>0 else 'Worse on both'
+                sig='Improved on both' if dl1<0 and dpr>0 else 'Mixed' if dl1<0 or dpr>0 else 'Declined on both'
             else: sig='—'
             cmp(f'di sig {d} {e["st"]}', row[H['Signal']], sig)
 

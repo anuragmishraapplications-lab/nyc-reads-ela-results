@@ -1007,14 +1007,14 @@ function diRows(){
 }
 /* The signal Liz asked for: a district is marked "improved on both" when it
    moved the right way on BOTH measures — fewer Level 1s and higher
-   proficiency — and "worse on both" when it moved the wrong way on both.
+   proficiency — and "declined on both" when it moved the wrong way on both.
    Anything else is mixed. Named after the direction, not a color, because
    the palette is purple and orange rather than green and red. */
 function signal(r){
   if (r.dprof==null || r.dl1==null) return { t:'—', c:'#9CA3AF', rank:-1, k:'na' };
   if (r.dl1<0 && r.dprof>0) return { t:'Improved on both', c:C_UP,   rank:3, k:'up' };
   if (r.dl1<0 || r.dprof>0) return { t:'Mixed',            c:'#94A3B2', rank:2, k:'mixed' };
-  return { t:'Worse on both', c:C_DOWN, rank:1, k:'down' };
+  return { t:'Declined on both', c:C_DOWN, rank:1, k:'down' };
 }
 /* ---------------------------------------------------------------------
    Subgroup analysis, on the district page.
@@ -1199,7 +1199,7 @@ function renderDI(){
     </div>
     <div class="flagbox">
       <div class="flaghd"><span class="dot" style="background:${C_DOWN}"></span>
-        Worse on both <b>(${flag.length})</b>
+        Declined on both <b>(${flag.length})</b>
         <span class="muted">more Level 1s and lower proficiency vs ${base}</span></div>
       <div class="chiprow">${chips(flag,C_DOWN)}</div>
     </div>
