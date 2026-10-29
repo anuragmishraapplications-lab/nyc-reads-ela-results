@@ -1163,6 +1163,7 @@ function renderDI(){
 
   /* subgroup breakdown for whatever this page is currently scoped to */
   renderDISubgroups(rows, base, $('di-grade').value);
+  if (HAS_MAP) renderDIMap();
 
   /* districts whose grade band rests on different grades in the two years */
   const nc = rows.filter(r => r.bandNote);
@@ -2276,11 +2277,409 @@ function renderPA(){
 }
 
 /* =====================================================================
+   PAGE 9 — SCHOOL EXPLORER  (internal builds only)
+
+   The school file is public, published by NYCPS beside the city, borough and
+   district files. It is held to the internal build because naming individual
+   schools invites a league table, which the district view does not.
+
+   All Students only. Subgroups exist in the source but 29.6% of school-level
+   subgroup rows are suppressed, against about 5% at district level, and the
+   gaps fall hardest on the small schools people most want to look at.
+
+   Size is the thing to keep in view here. A school's percentage rests on far
+   fewer students than a district's, so it moves further for reasons that are
+   not teaching. The page defaults to a minimum tested count, says so, and
+   plots change against size directly so the effect is visible rather than
+   implied.
+   ===================================================================== */
+const SCH = D.schools || null;
+const HAS_SCHOOLS = !!(SCH && D.school && D.school.length);
+if (HAS_SCHOOLS) IX.school = buildIndex(D.school);
+
+const schName = i => SCH.name[i];
+const schDbn  = i => SCH.dbn[i];
+const schDist = i => SCH.dist[i];
+const ALL_SCH = HAS_SCHOOLS ? SCH.dbn.map((_, i) => i) : [];
+
+function initSC(){
+  if (!HAS_SCHOOLS) return;
+  fillBaselines($('sc-base')); fillBands($('sc-grade'));
+  fillMetrics($('sc-metric'), ['prof','l1','l4','mean'], 'prof');
+  fill($('sc-dist'), [{v:'', t:'All districts'}].concat(
+    D.districts.map((d,i) => ({ v:i, t:`District ${d} · ${D.districtBoro[i]}` }))), '');
+  fill($('sc-min'), [
+    { v:'0',  t:'No minimum' },
+    { v:'20', t:'20 or more tested' },
+    { v:'40', t:'40 or more tested' },
+    { v:'80', t:'80 or more tested' },
+  ], '20');
+  ['sc-base','sc-grade','sc-dist','sc-metric','sc-min'].forEach(id => on($(id), () => { SC.focus = null; renderSC(); }));
+  $('sc-q').addEventListener('input', () => { SC.focus = null; renderSC(); });
+  $('sc-reset').onclick = () => {
+    SC.focus = null; $('sc-q').value = '';
+    $('sc-dist').value = ''; $('sc-min').value = '20';
+    $('sc-base').value = 2023; $('sc-grade').value = 'all'; $('sc-metric').value = 'prof';
+    renderSC();
+  };
+  $('sc-focus-clear').onclick = () => { SC.focus = null; renderSC(); };
+}
+const SC = { focus: null };
+
+/* the schools the filters leave, with both years already aggregated */
+function scRows(){
+  const base = +$('sc-base').value, bk = $('sc-grade').value;
+  const dsel = $('sc-dist').value, min = +$('sc-min').value;
+  const q = $('sc-q').value.trim().toLowerCase();
+  const out = [];
+  for (const i of ALL_SCH){
+    if (dsel !== '' && schDist(i) !== +dsel) continue;
+    if (q && !(schName(i).toLowerCase().includes(q) || schDbn(i).toLowerCase().includes(q))) continue;
+    const cur = agg('school',[i],bk,2026,ALLCAT), bse = agg('school',[i],bk,base,ALLCAT);
+    if (!cur) continue;
+    if (cur.n < min) continue;
+    out.push({ i, cur, bse,
+      dprof: delta(cur, bse, a=>a.prof),
+      dl1:   delta(cur, bse, a=>a.l1),
+      d:     delta(cur, bse, METRICS[$('sc-metric').value].get),
+      bandNote: bandNote(cur, bse, bk) });
+  }
+  return out;
+}
+
+function renderSC(){
+  if (!HAS_SCHOOLS) return;
+  const base = +$('sc-base').value, bk = $('sc-grade').value;
+  const mk = $('sc-metric').value, M = METRICS[mk];
+  const bl = band(bk).label.toLowerCase();
+  const dsel = $('sc-dist').value;
+  const where = dsel === '' ? 'all districts' : `District ${D.districts[+dsel]}`;
+  const rows = scRows();
+  const min = +$('sc-min').value;
+
+  $('sc-scope').innerHTML =
+    `<b>Read this before using this page.</b> These are individual schools, and a school's percentage rests on far fewer students than a district's. `
+    + `A grade of 40 moves 2.5 percentage points when one child's result changes, so a school can appear to swing sharply for reasons that have nothing to do with teaching. `
+    + `The minimum tested filter is set to <b>${min || 'none'}</b>${min?' students':''} by default for that reason, and the second chart plots change against size so the pattern is visible rather than assumed. `
+    + `Treat a single school's movement as a question to ask, not a finding. `
+    + `Charter schools and District&nbsp;75 are not in this file, as elsewhere in this tool.`
+    + `<br><br><b>A school's results do not add up to its district's before 2025.</b> `
+    + `Add up every school in a district and the total matches the published district figure in 2026, but falls short in earlier years, `
+    + `by about 17,000 students citywide in 2023 and 2024 and roughly 22,000 in 2018. `
+    + `Those are District&nbsp;75 and out-of-district placement students, who belong to no regular school and so appear in no school row, `
+    + `while the district file counted them until the attribution rule changed in 2025. `
+    + `Comparing a school against itself over time is unaffected. Comparing a school against its district, as the focus panel does, is a comparison against the published district figure, which carried those extra students in the earlier years.`;
+
+  /* ---- KPIs ---- */
+  const withChange = rows.filter(r => r.d != null);
+  const up = withChange.filter(r => r.d * M.good > 0).length;
+  const tested = rows.reduce((a,r) => a + r.cur.n, 0);
+  const vals = rows.map(r => M.get(r.cur)).sort((a,b)=>a-b);
+  const median = vals.length ? (vals.length % 2 ? vals[(vals.length-1)/2]
+                 : (vals[vals.length/2-1]+vals[vals.length/2])/2) : null;
+  $('sc-kpi').innerHTML = [
+    kpi('Schools shown', String(rows.length), '', null, `${where}, ${bl}`, 'n'),
+    kpi(`Median ${M.short.toLowerCase()}`, median==null?'—':f1(median), mk==='mean'?'':'%', null, '2026', 'pair-p'),
+    kpi('Students tested', num(tested), '', null, '2026', 'n'),
+    kpi(`Moved the right way vs ${base}`, `${up}`, `/${withChange.length}`, null,
+        `on ${M.short.toLowerCase()}`, up > withChange.length/2 ? 'g' : 'b'),
+  ].join('');
+
+  /* ---- insight ---- */
+  const sorted = rows.slice().sort((a,b) => (M.get(b.cur)-M.get(a.cur)) * M.good);
+  const movers = withChange.slice().sort((a,b) => (b.d-a.d) * M.good);
+  $('sc-insight').innerHTML = rows.length
+    ? `Across <b>${rows.length}</b> schools in ${where} on ${bl}, the median ${M.short.toLowerCase()} in 2026 is <b>${f1(median)}${mk==='mean'?'':'%'}</b>, `
+      + `ranging from ${f1(M.get(sorted[sorted.length-1].cur))} to ${f1(M.get(sorted[0].cur))}. `
+      + (movers.length ? `Measured against ${base}, <b>${up}</b> of ${withChange.length} moved in the direction of improvement. `
+        + `The largest gains are at ${movers.slice(0,3).map(r=>`${esc(schName(r.i))} (${pp(r.d)}pp)`).join(', ')}.` : '')
+    : 'No schools match these filters.';
+
+  /* ---- ranked bar ---- */
+  $('sc-ranktitle').textContent =
+    `Schools ranked by ${M.short.toLowerCase()}, 2026 · ${where}`;
+  const top = sorted.slice(0, 60);
+  draw('sc-rank', {
+    type:'bar',
+    data:{ labels: top.map(r => schDbn(r.i)), datasets:[{
+      label: M.short, data: top.map(r => M.get(r.cur)), borderWidth:0,
+      backgroundColor: top.map(r => BORO_COLOR[D.districtBoro[schDist(r.i)]]) }]},
+    options:{ scales:{ x:Object.assign({},gridX,{ticks:{autoSkip:false,maxRotation:90,minRotation:90,font:{size:9}}}),
+        y:gridY(M.short,{beginAtZero:mk!=='mean'}) },
+      onClick:(e,els) => { if (els.length){ SC.focus = top[els[0].index].i; renderSC();
+        $('sc-focus').scrollIntoView({behavior:'smooth',block:'start'}); } },
+      plugins:{ legend:{display:false},
+        tooltip:{callbacks:{ title:c=>schName(top[c[0].dataIndex].i),
+          label:c=>[`${schDbn(top[c.dataIndex].i)} · District ${D.districts[schDist(top[c.dataIndex].i)]}`,
+                    `${M.short}: ${f1(c.parsed.y)}`,
+                    `Tested 2026: ${num(top[c.dataIndex].cur.n)}`,
+                    top[c.dataIndex].d==null?`No comparable ${base} figure`:`Change vs ${base}: ${pp(top[c.dataIndex].d)}pp`] }} } }
+  });
+  if (rows.length > 60) $('sc-ranktitle').textContent += `  (top 60 of ${rows.length})`;
+
+  /* ---- change against size ---- */
+  const pts = withChange.map(r => ({ x:r.cur.n, y:r.d, i:r.i }));
+  draw('sc-scatter', {
+    type:'scatter',
+    data:{ datasets: D.boros.map(b => ({
+      label:b, backgroundColor:BORO_COLOR[b], pointRadius:4,
+      data: pts.filter(p => D.districtBoro[schDist(p.i)] === b) })).filter(d=>d.data.length) },
+    options:{ scales:{ x:gridY('students tested, 2026',{beginAtZero:true}),
+        y:gridY(`change in ${M.short.toLowerCase()} vs ${base} (pp)`,
+                {grid:{color:c=>c.tick.value===0?'#9AA6B2':'#EDF1F5'}}) },
+      onClick:(e,els) => { if (els.length){
+        const ds = els[0].datasetIndex, ix = els[0].index;
+        SC.focus = pts.filter(p => D.districtBoro[schDist(p.i)] === D.boros.filter(b=>pts.some(q=>D.districtBoro[schDist(q.i)]===b))[ds])[ix].i;
+        renderSC(); $('sc-focus').scrollIntoView({behavior:'smooth',block:'start'}); } },
+      plugins:{ legend:{display:false},
+        tooltip:{callbacks:{ label:c=>[schName(c.raw.i), `${schDbn(c.raw.i)} · tested ${num(c.raw.x)}`, `Change: ${pp(c.raw.y)}pp`] }} } }
+  });
+  $('sc-scatter-lg').innerHTML = D.boros.map(b =>
+    `<span><i class="dot" style="background:${BORO_COLOR[b]}"></i>${b}</span>`).join('');
+
+  renderSCFocus(base, bk);
+
+  /* ---- table ---- */
+  $('sc-tbltitle').textContent = `School results, 2026, and change from ${base}`;
+  $('sc-tblsub').innerHTML = `${esc(where)}, ${esc(bl)}. Click a row to open that school. `
+    + `A school whose grade band rests on different grades in the two years reads <b>n/c</b>, because the two figures would not be like for like.`;
+  const tr = rows.slice().sort((a,b) => (M.get(b.cur)-M.get(a.cur)) * M.good);
+  $('sc-table').innerHTML =
+    `<thead><tr><th class="nos">School</th><th class="nos">DBN</th><th class="nos">District</th>`
+    + `<th class="nos">Tested 2026</th><th class="nos">% Level 3–4</th><th class="nos">% Level 1</th>`
+    + `<th class="nos">Mean score</th><th class="nos">Change in ${esc(M.short.toLowerCase())}</th></tr></thead><tbody>`
+    + tr.map(r => `<tr data-sch="${r.i}" style="cursor:pointer">`
+        + `<td class="nm" style="white-space:normal;max-width:330px;text-align:left">${esc(schName(r.i))}</td>`
+        + `<td>${esc(schDbn(r.i))}</td><td>${D.districts[schDist(r.i)]}</td>`
+        + `<td>${num(r.cur.n)}</td>`
+        + `<td><span class="cell" style="${shade(r.cur.prof,5,85,'0,112,185')}">${f1(r.cur.prof)}</span></td>`
+        + `<td><span class="cell" style="${shade(r.cur.l1,2,70,'192,72,60')}">${f1(r.cur.l1)}</span></td>`
+        + `<td>${f1(r.cur.mean)}</td>`
+        + `<td>${r.bandNote ? `<span class="cell nc" title="${esc(r.bandNote)}">n/c</span>`
+             : r.d==null ? '<span class="sup">s</span>'
+             : `<span class="cell" style="${heat(r.d,8,M.good)}">${pp(r.d)}</span>`}</td></tr>`).join('')
+    + `</tbody>`;
+  $('sc-table').querySelectorAll('tr[data-sch]').forEach(row => {
+    row.onclick = () => { SC.focus = +row.dataset.sch; renderSC();
+      $('sc-focus').scrollIntoView({behavior:'smooth',block:'start'}); };
+  });
+}
+
+/* one school, set against the district it sits in and the city as a whole */
+function renderSCFocus(base, bk){
+  const host = $('sc-focus');
+  if (SC.focus == null){ host.style.display = 'none'; return; }
+  host.style.display = '';
+  const i = SC.focus, di = schDist(i);
+  const cur = agg('school',[i],bk,2026,ALLCAT), bse = agg('school',[i],bk,base,ALLCAT);
+  $('sc-focus-title').textContent = schName(i);
+  $('sc-focus-sub').innerHTML = `${esc(schDbn(i))} &middot; District ${D.districts[di]} &middot; ${D.districtBoro[di]} &middot; ${esc(band(bk).label.toLowerCase())}`;
+
+  const dP = delta(cur,bse,a=>a.prof), dL = delta(cur,bse,a=>a.l1);
+  $('sc-focus-kpi').innerHTML = [
+    kpi('2026 proficiency', cur?f1(cur.prof):'—','%', null, 'Level 3–4 share', 'pair-p'),
+    kpi(`Proficiency change vs ${base}`, dP==null?'—':pp(dP),'pp', null, 'Percentage points', 'pair-p'),
+    kpi('2026 Level 1', cur?f1(cur.l1):'—','%', null, 'Lowest performance level', 'pair-l'),
+    kpi('Students tested', cur?num(cur.n):'—','', null, '2026', 'n'),
+  ].join('');
+
+  /* school against district and city, on the same grades */
+  const series = (lvl, geos) => MODERN.map(y => { const a = agg(lvl,geos,bk,y,ALLCAT); return a ? a.prof : null; });
+  draw('sc-bench', {
+    type:'line',
+    data:{ labels: MODERN.map(String), datasets:[
+      { label:'This school', data: series('school',[i]), borderColor:C_PROF, backgroundColor:C_PROF, borderWidth:3.5, pointRadius:4, tension:.2, spanGaps:false },
+      { label:`District ${D.districts[di]}`, data: series('dist',[di]), borderColor:CAT[3], backgroundColor:CAT[3], borderWidth:2, borderDash:[5,3], pointRadius:3, tension:.2 },
+      { label:'Citywide', data: series('city',[0]), borderColor:'#94A3B2', backgroundColor:'#94A3B2', borderWidth:2, borderDash:[2,3], pointRadius:3, tension:.2 },
+    ]},
+    options:{ scales:{ x:gridX, y:gridY('% at Level 3–4',{beginAtZero:true}) },
+      plugins:{ legend:{position:'bottom'},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${f1(c.parsed.y)}%`}} } }
+  });
+
+  const lv = MODERN.map(y => agg('school',[i],bk,y,ALLCAT));
+  draw('sc-dist', {
+    type:'bar',
+    data:{ labels: MODERN.map(String), datasets: ['l1','l2','l3','l4'].map((k,li) => ({
+      label:`Level ${li+1}`, backgroundColor:LVL_COLOR[li], borderWidth:0,
+      data: lv.map(a => a ? a[k] : null) }))},
+    options:{ scales:{ x:Object.assign({stacked:true},gridX), y:gridY('% of tested students',{stacked:true,max:100}) },
+      plugins:{ legend:{position:'bottom'},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${f1(c.parsed.y)}%`}} } }
+  });
+}
+
+/* =====================================================================
+   DISTRICT MAP
+
+   Thirty-two outlines, pre-simplified to SVG paths at build time and drawn
+   straight onto a canvas. No map library and no tile server, so the file
+   stays self-contained and works offline.
+   ===================================================================== */
+const MAP = D.map || null;
+const HAS_MAP = !!MAP;
+const MAPST = { paths:null, boxes:null, hover:null };
+
+function mapShade(t){
+  /* t in [-1,1]: the direction palette, same meaning as everywhere else */
+  if (t == null) return '#E8EDF2';
+  const a = Math.min(0.9, 0.12 + Math.abs(t) * 0.78);
+  return t >= 0 ? rgba(C_UP, a) : rgba(C_DOWN, a);
+}
+
+function initDIMap(){
+  if (!HAS_MAP) return;
+  fill($('di-map-metric'), [
+    { v:'dprof', t:'Change in proficiency' },
+    { v:'dl1',   t:'Change in Level 1 share' },
+    { v:'prof',  t:'Proficiency, 2026' },
+    { v:'l1',    t:'Level 1 share, 2026' },
+  ], 'dprof');
+  on($('di-map-metric'), renderDIMap);
+  MAPST.paths = {};
+  for (const k of Object.keys(MAP.paths)) MAPST.paths[k] = new Path2D(MAP.paths[k]);
+
+  const cv = $('di-map');
+  cv.addEventListener('mousemove', e => {
+    const hit = mapHit(e);
+    if (hit !== MAPST.hover){ MAPST.hover = hit; renderDIMap(); }
+    const tip = $('di-map-tip');
+    if (hit == null){ tip.style.opacity = 0; return; }
+    const r = cv.getBoundingClientRect();
+    tip.style.opacity = 1;
+    tip.style.left = Math.min(r.width - 170, e.clientX - r.left + 12) + 'px';
+    tip.style.top  = (e.clientY - r.top + 12) + 'px';
+    tip.innerHTML = MAPST.tipFor ? MAPST.tipFor(hit) : '';
+  });
+  cv.addEventListener('mouseleave', () => {
+    MAPST.hover = null; $('di-map-tip').style.opacity = 0; renderDIMap();
+  });
+  cv.addEventListener('click', e => {
+    const hit = mapHit(e);
+    if (hit == null) return;
+    /* clicking a district is the same as ticking it in the Districts filter,
+       so the whole page follows, not just the map */
+    const sel = msSel('di-ms-dist');
+    const key = String(hit);
+    if (sel.has(key) && sel.size === 1) sel.clear(); else { sel.clear(); sel.add(key); }
+    buildDIAssignmentPickers(); renderDI();
+    document.querySelectorAll('#di-ms-dist .ms-opt input').forEach(cb => { cb.checked = sel.has(cb.value); });
+    const sum = document.querySelector('#di-ms-dist .ms-sum');
+    if (sum){ sum.textContent = sel.size ? `District ${D.districts[hit]}` : 'All 32 districts';
+              sum.classList.toggle('on', !!sel.size); }
+  });
+}
+
+function mapHit(e){
+  const cv = $('di-map'), r = cv.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * MAP.w;
+  const y = (e.clientY - r.top)  / r.height * MAP.h;
+  /* The paths are in map units, so the hit test has to be done in map units
+     too: reset the transform to identity and probe with the unscaled point.
+     Scaling the point into device pixels tests it against a path that is not
+     there, which silently matches nothing. */
+  const ctx = cv.getContext('2d');
+  ctx.save(); ctx.setTransform(1,0,0,1,0,0);
+  let hit = null;
+  for (const k of Object.keys(MAPST.paths)){
+    if (ctx.isPointInPath(MAPST.paths[k], x, y)){ hit = D.districts.indexOf(k); break; }
+  }
+  ctx.restore();
+  return hit;
+}
+
+function renderDIMap(){
+  if (!HAS_MAP) return;
+  const base = +$('di-base').value, bk = $('di-grade').value, cat = +$('di-cat').value;
+  const mode = $('di-map-metric').value;
+  const gl = groupLabel($('di-dim'), $('di-cat'));
+  const isChange = mode === 'dprof' || mode === 'dl1';
+  const metric = (mode === 'dprof' || mode === 'prof') ? 'prof' : 'l1';
+  const good = METRICS[metric].good;
+
+  const val = {}; let maxAbs = 0;
+  for (const i of ALL_DIST){
+    const cur = agg('dist',[i],bk,2026,cat), bse = agg('dist',[i],bk,base,cat);
+    let v = null;
+    if (isChange) v = delta(cur, bse, METRICS[metric].get);
+    else if (cur) v = METRICS[metric].get(cur);
+    val[i] = v;
+    if (v != null && isChange) maxAbs = Math.max(maxAbs, Math.abs(v));
+  }
+  const nums = Object.values(val).filter(v => v != null);
+  const lo = nums.length ? Math.min(...nums) : 0, hi = nums.length ? Math.max(...nums) : 1;
+  maxAbs = Math.max(maxAbs, 1);
+
+  $('di-map-title').textContent = isChange
+    ? `${mode==='dprof'?'Change in proficiency':'Change in Level 1 share'} by district, ${base} to 2026`
+    : `${mode==='prof'?'Proficiency':'Level 1 share'} by district, 2026`;
+  $('di-map-sub').innerHTML = `${esc(band(bk).label)}, ${esc(gl.toLowerCase())}. `
+    + `Click a district to focus the whole page on it; click it again to go back to all 32. `
+    + (isChange ? `Purple is movement in the direction of improvement, orange against it.`
+                : `Darker is higher.`);
+
+  const cv = $('di-map');
+  const wrap = cv.parentElement.getBoundingClientRect();
+  const cssW = Math.max(320, Math.min(720, wrap.width || 720));
+  const dpr = window.devicePixelRatio || 1;
+  cv.style.height = Math.round(cssW * MAP.h / MAP.w) + 'px';
+  cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssW * MAP.h / MAP.w * dpr);
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,cv.width,cv.height);
+  const s = cv.width / MAP.w;
+  ctx.save(); ctx.scale(s,s);
+  const selected = msSel('di-ms-dist');
+
+  for (const k of Object.keys(MAPST.paths)){
+    const i = D.districts.indexOf(k), v = val[i];
+    let fill;
+    if (v == null) fill = '#E8EDF2';
+    else if (isChange) fill = mapShade((v * good) / maxAbs);
+    else fill = shadeHex(v, lo, hi, metric === 'prof' ? [0,112,185] : [192,72,60]);
+    ctx.fillStyle = fill;
+    ctx.fill(MAPST.paths[k]);
+    const lit = MAPST.hover === i || selected.has(String(i));
+    ctx.lineWidth = lit ? 3 : 1.2;
+    ctx.strokeStyle = lit ? '#1D242B' : '#FFFFFF';
+    ctx.stroke(MAPST.paths[k]);
+  }
+  ctx.restore();
+
+  MAPST.tipFor = i => {
+    const v = val[i];
+    const extra = v == null ? 'no comparable figure'
+      : isChange ? `${pp(v)}pp` : `${f1(v)}%`;
+    const a = agg('dist',[i],bk,2026,cat);
+    return `<b>District ${D.districts[i]} · ${D.districtBoro[i]}</b>`
+      + `${isChange ? (mode==='dprof'?'Change in proficiency':'Change in Level 1') : (mode==='prof'?'Proficiency':'Level 1 share')}: ${extra}`
+      + (a ? `<br>${num(a.n)} tested in 2026` : '');
+  };
+
+  const stops = isChange
+    ? [mapShade(-1), mapShade(-0.5), '#F1F4F7', mapShade(0.5), mapShade(1)]
+    : [0,0.25,0.5,0.75,1].map(t => shadeHex(lo + t*(hi-lo), lo, hi, metric==='prof'?[0,112,185]:[192,72,60]));
+  $('di-map-legend').innerHTML =
+    `<span>${isChange ? `against improvement` : f1(lo)+'%'}</span>`
+    + `<span class="scale">${stops.map(c=>`<i style="background:${c}"></i>`).join('')}</span>`
+    + `<span>${isChange ? `toward improvement` : f1(hi)+'%'}</span>`
+    + (nums.length < ALL_DIST.length ? `<span style="margin-left:10px">grey: suppressed or not comparable</span>` : '');
+}
+
+/* solid colour from a single hue ramp, for the level-style map modes */
+function shadeHex(v, lo, hi, rgb){
+  const t = hi === lo ? 0.5 : Math.max(0, Math.min(1, (v-lo)/(hi-lo)));
+  const a = 0.14 + t*0.76;
+  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a.toFixed(3)})`;
+}
+
+/* =====================================================================
    NAVIGATION + WIRING
    ===================================================================== */
 const RENDER = { ov:renderOV, di:renderDI, bo:renderBO, ph:renderPH, sg:renderSG, tf:renderTF };
 if (HAS_VENDORS) RENDER.ve = renderVE;
 if (HAS_REF)     RENDER.pa = renderPA;
+if (HAS_SCHOOLS) RENDER.sc = renderSC;
 const drawn = new Set();
 
 function show(p){
@@ -2298,7 +2697,7 @@ document.addEventListener('click', e => {
 
 /* re-render the visible page whenever its filters change (handled per page),
    but make sure a page that was never opened renders on first view */
-['ov','di','bo','ph','ve','sg','tf','pa'].forEach(p => {
+['ov','di','bo','ph','ve','sg','tf','pa','sc'].forEach(p => {
   document.querySelectorAll(`#pg-${p} select`).forEach(s => s.addEventListener('change', () => { drawn.add(p); }));
 });
 
@@ -2310,6 +2709,13 @@ Object.keys(MARKS).forEach(p => {
 });
 
 initOV(); initDI(); initBO(); initPH(); if (HAS_VENDORS) initVE(); initSG(); initTF();
+if (HAS_SCHOOLS) initSC(); else {
+  document.querySelectorAll('[data-p="sc"]').forEach(n => n.remove());
+  const pg = $('pg-sc'); if (pg) pg.remove();
+}
+if (HAS_MAP) initDIMap(); else {
+  const w = $('di-map-wrap'); if (w) w.remove();
+}
 if (HAS_REF) initPA(); else {
   /* no refusals data in the payload: drop the page rather than leave an
      empty one in the navigation */

@@ -37,6 +37,12 @@ INTERNAL = '--internal' in sys.argv
 PUBLIC_INCLUDES_PROVIDERS  = False
 PUBLIC_INCLUDES_CURRICULUM = True
 
+# School-level results and the district map are internal only. The school
+# file is public, but naming individual schools invites a league table, so
+# it ships in the internal build alone. The map is held with it so the
+# public file CPRL hosts stays exactly as it is.
+PUBLIC_INCLUDES_SCHOOLS    = False
+
 tpl   = open(os.path.join(R,'src/template.html')).read()
 app   = open(os.path.join(R,'src/app.js')).read()
 chart = open(os.path.join(R,'vendor/chart.umd.min.js')).read()
@@ -73,6 +79,19 @@ if not INTERNAL:
         for host in ('di-ms-reads','di-ms-curr','bo-ms-reads','bo-ms-curr'):
             tpl = re.sub(r'\s*<div class="fg"><span class="fl">[^<]*</span><div id="%s"></div></div>' % host,
                          '', tpl)
+
+if not INTERNAL and not PUBLIC_INCLUDES_SCHOOLS:
+    payload_obj.pop('schools', None)
+    payload_obj.pop('school', None)
+    payload_obj.pop('map', None)
+    # drop the schools page, its nav entry and the map card
+    tpl = re.sub(r'\s*<div class="ni" data-p="sc">.*?</div>\n', '\n', tpl, flags=re.S)
+    i = tpl.index('<!-- ============ SCHOOLS ============ -->')
+    j = tpl.index('<!-- ============ PARTICIPATION AND REFUSALS ============ -->')
+    tpl = tpl[:i] + tpl[j:]
+    i = tpl.index('<div class="cd" id="di-map-wrap">')
+    j = tpl.index('<div class="cd"><div class="cdh"><div>\n      <div class="ct">Districts by direction of change')
+    tpl = tpl[:i] + tpl[j:]
 
 payload = json.dumps(payload_obj, separators=(',',':'))
 

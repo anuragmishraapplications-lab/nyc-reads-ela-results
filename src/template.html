@@ -54,6 +54,8 @@ body{background:var(--paper);color:var(--ink);font-family:Hind,sans-serif;line-h
 .fb{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 17px;row-gap:11px}
 .fg{display:flex;align-items:center;gap:9px}
 .fl{font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.09em}
+input[type=search]{font-family:Hind,sans-serif;font-size:12.5px;padding:7px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);min-width:190px}
+input[type=search]:focus{outline:2px solid var(--c2);outline-offset:1px}
 select,.btn{font-family:Hind,sans-serif;font-size:12.5px;padding:7px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);cursor:pointer;font-weight:500}
 select:focus,.btn:focus{outline:2px solid var(--c2);outline-offset:1px}
 .btn{background:var(--navy);color:#fff;border-color:var(--navy);font-weight:600}
@@ -178,6 +180,16 @@ dl.defs dd{margin-left:0;color:#41505C}
 .chk input{accent-color:var(--accent);cursor:pointer;margin:0}
 .mkl{display:flex;flex-wrap:wrap;gap:18px;row-gap:9px;margin-top:15px;padding-top:13px;border-top:1px dashed var(--line);line-height:1.5}
 .mkl:empty{display:none}
+/* ---------- district map ---------- */
+.mapwrap{position:relative;width:100%;max-width:720px;margin:0 auto}
+.mapwrap canvas{width:100%;height:auto;display:block;cursor:pointer}
+.maptip{position:absolute;pointer-events:none;background:#1D242B;color:#fff;border-radius:7px;
+  padding:7px 11px;font-size:12px;line-height:1.45;opacity:0;transition:opacity .12s;white-space:nowrap;z-index:5}
+.maptip b{display:block;font-size:12.5px;margin-bottom:2px}
+.maplegend{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+.maplegend .scale{display:flex;height:11px;border-radius:3px;overflow:hidden;width:220px}
+.maplegend .scale i{flex:1}
+.maplegend span{font-size:11.5px;color:var(--muted)}
 .mkl span{font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:6px}
 @media(max-width:1560px){.kr{grid-template-columns:repeat(2,1fr)}.kr.k4{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:1180px){.g2,.g21{grid-template-columns:1fr}}
@@ -203,6 +215,7 @@ dl.defs dd{margin-left:0;color:#41505C}
     <div class="ni" data-p="ve"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7h-9M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>Providers &amp; curriculum</div>
     <div class="ni" data-p="sg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>Subgroups &amp; gaps</div>
     <div class="ni" data-p="tf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg>Test format</div>
+    <div class="ni" data-p="sc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 10 8-5 8 5-8 5z"/><path d="M4 14l8 5 8-5"/></svg>Schools</div>
     <div class="ni" data-p="pa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/><circle cx="12" cy="12" r="10"/></svg>Participation</div>
   </div>
   <div class="sb-f">
@@ -330,6 +343,14 @@ dl.defs dd{margin-left:0;color:#41505C}
   <div id="di-nc"></div>
   <div class="note info" id="di-insight"></div>
   <div class="kr k4" id="di-kpi"></div>
+  <div class="cd" id="di-map-wrap">
+    <div class="cdh"><div><div class="ct" id="di-map-title"></div>
+      <div class="cs" id="di-map-sub"></div></div>
+      <div style="display:flex;gap:8px;align-items:center"><select id="di-map-metric"></select></div></div>
+    <div class="mapwrap"><canvas id="di-map"></canvas><div class="maptip" id="di-map-tip"></div></div>
+    <div class="maplegend" id="di-map-legend"></div>
+  </div>
+
   <div class="cd"><div class="cdh"><div>
       <div class="ct">Districts by direction of change on both measures</div>
       <div class="cs">Districts that moved the right way on both measures, and those that moved the wrong way on both, named. Both lists follow the filters above, so they change with the baseline, grade band and student group.</div>
@@ -683,6 +704,76 @@ dl.defs dd{margin-left:0;color:#41505C}
     <div class="cdh"><div><div class="ct">Selected measure by grade and year, with the transition year marked</div>
       <div class="cs">Every grade, every year on the current standards. The year each grade moved to computer is marked.</div></div></div>
     <div class="tw"><table id="tf-table"></table></div>
+  </div>
+</section>
+
+<!-- ============ SCHOOLS ============ -->
+<section class="pg" id="pg-sc">
+  <div class="ph"><div>
+    <div class="eyebrow">School level</div>
+    <div class="pt">School explorer</div>
+    <div class="pst">Results for each of the 1,128 district schools reporting grades 3 to 8 ELA. Choose a district to see its schools, or search by name. Every measure matches the rest of this tool: percentages are derived from student counts and changes are in percentage points.</div>
+  </div></div>
+
+  <div class="note warn" id="sc-scope"></div>
+
+  <div class="fb">
+    <div class="fg"><span class="fl">Baseline</span><select id="sc-base"></select></div>
+    <div class="fg"><span class="fl">Grades</span><select id="sc-grade"></select></div>
+    <div class="fg"><span class="fl">District</span><select id="sc-dist"></select></div>
+    <div class="fg"><span class="fl">Result</span><select id="sc-metric"></select></div>
+    <div class="fg"><span class="fl">Min tested</span><select id="sc-min"></select></div>
+    <div class="fg"><span class="fl">Search</span><input id="sc-q" type="search" placeholder="school name or DBN" autocomplete="off"></div>
+    <div class="spacer"></div>
+    <button class="btn gh" id="sc-reset" type="button">Reset filters</button>
+    <a class="btn gh srcbtn" href="https://infohub.nyced.org/reports/academics/test-results" target="_blank" rel="noopener">Source files (NYCPS InfoHub)</a>
+  </div>
+
+  <div id="sc-focus" style="display:none">
+    <div class="cd focuscard">
+      <div class="cdh"><div>
+        <div class="eyebrow">In focus</div>
+        <div class="ct" id="sc-focus-title"></div>
+        <div class="cs" id="sc-focus-sub"></div>
+      </div><button class="btn gh" id="sc-focus-clear" type="button">Clear</button></div>
+      <div class="kr k4" id="sc-focus-kpi"></div>
+      <div class="g2" style="margin-top:20px">
+        <div>
+          <div class="ct" style="font-size:16px;margin-bottom:4px">This school against its district and the city</div>
+          <div class="cs" style="margin-bottom:12px">Percent at Level 3&ndash;4, with the district and citywide figures on the same grades for comparison.</div>
+          <div class="cc sm" id="wrap-sc-bench"><canvas id="sc-bench"></canvas></div>
+        </div>
+        <div>
+          <div class="ct" style="font-size:16px;margin-bottom:4px">Distribution across performance levels, by year</div>
+          <div class="cs" style="margin-bottom:12px">Share of tested students at each level.</div>
+          <div class="cc sm" id="wrap-sc-dist"><canvas id="sc-dist"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note info" id="sc-insight"></div>
+  <div class="kr k4" id="sc-kpi"></div>
+
+  <div class="cd">
+    <div class="cdh"><div><div class="ct" id="sc-ranktitle"></div>
+      <div class="cs">Click a bar to open that school. Schools below the minimum tested count are excluded, because a handful of students makes a percentage move a long way for reasons that have nothing to do with teaching.</div></div>
+      <button class="btn gh" data-png="sc-rank">PNG</button></div>
+    <div class="cc xl" id="wrap-sc-rank"><canvas id="sc-rank"></canvas></div>
+  </div>
+
+  <div class="cd">
+    <div class="cdh"><div><div class="ct">Change against size, by school</div>
+      <div class="cs">Horizontal axis: students tested in 2026. Vertical axis: change in the selected measure. Smaller schools scatter much more widely, which is the point of the chart.</div></div>
+      <button class="btn gh" data-png="sc-scatter">PNG</button></div>
+    <div class="cc lg" id="wrap-sc-scatter"><canvas id="sc-scatter"></canvas></div>
+    <div class="legend" id="sc-scatter-lg"></div>
+  </div>
+
+  <div class="cd">
+    <div class="cdh"><div><div class="ct" id="sc-tbltitle"></div>
+      <div class="cs" id="sc-tblsub"></div></div></div>
+    <div class="tw"><table id="sc-table"></table></div>
   </div>
 </section>
 
