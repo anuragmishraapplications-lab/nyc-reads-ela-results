@@ -85,8 +85,9 @@ if not INTERNAL and not PUBLIC_INCLUDES_SCHOOLS:
     payload_obj.pop('school', None)
     payload_obj.pop('map', None)
     # drop the schools page, its nav entry and the map card
-    tpl = re.sub(r'\s*<div class="ni" data-p="sc">.*?</div>\n', '\n', tpl, flags=re.S)
-    i = tpl.index('<!-- ============ SCHOOLS ============ -->')
+    for nav in ('sc', 'so'):
+        tpl = re.sub(r'\s*<div class="ni" data-p="%s">.*?</div>\n' % nav, '\n', tpl, flags=re.S)
+    i = tpl.index('<!-- ============ SCHOOLS OVERVIEW ============ -->')
     j = tpl.index('<!-- ============ PARTICIPATION AND REFUSALS ============ -->')
     tpl = tpl[:i] + tpl[j:]
     i = tpl.index('<div class="cd" id="di-map-wrap">')

@@ -412,44 +412,57 @@ def read_refusals(base):
 # under their district for free. The file holds no charter schools and no
 # District 75, matching the scope of the rest of the tool.
 # ---------------------------------------------------------------------------
+# Subgroups are carried for the comparable era only. All Students runs the full
+# span because the trend charts use it; every other category starts at 2023,
+# which is where any comparison can legitimately start anyway, and that alone
+# is the difference between a 7 MB payload and a 13 MB one.
+SCHOOL_SUBGROUP_FROM = 2023
+
+
 def read_schools(path):
     wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-    ws = wb['ELA - All']
-    rows = ws.iter_rows(values_only=True)
-    hdr = list(next(rows))
-    H = {h: i for i, h in enumerate(hdr) if h}
-    for c in ('DBN', 'School Name', 'Grade', 'Year', 'Category', 'Number Tested'):
-        assert c in H, (path, c, hdr)
     idx, names, dists, out = {}, [], [], []
     kept = supp = 0
-    for r in rows:
-        if r is None or r[0] is None:
+    for sn in SHEETS:
+        if sn not in wb.sheetnames:
             continue
-        if r[H['Category']] != 'All Students':
-            continue
-        vals = [r[H[c]] for c in ['Number Tested', 'Mean Scale Score', '# Level 1',
-                                  '# Level 2', '# Level 3', '# Level 4']]
-        if any(v == 's' for v in vals):
-            supp += 1
-            continue
-        if any(not isinstance(v, (int, float)) for v in vals):
-            continue
-        dbn = r[H['DBN']]
-        if dbn not in idx:
-            idx[dbn] = len(idx)
-            names.append(str(r[H['School Name']]).strip())
-            d = dbn[:2]
-            dists.append(DISTRICTS.index(d) if d in DISTRICTS else -1)
-        nt, ms, c1, c2, c3, c4 = vals
-        assert c1 + c2 + c3 + c4 == nt, (dbn, r)
-        out.append([idx[dbn], GI[str(r[H['Grade']])], YI[r[H['Year']]], CI['All Students'],
-                    int(nt), round(float(ms), 6), int(c1), int(c2), int(c3), int(c4)])
-        kept += 1
+        ws = wb[sn]
+        rows = ws.iter_rows(values_only=True)
+        hdr = list(next(rows))
+        H = {h: i for i, h in enumerate(hdr) if h}
+        for c in ('DBN', 'School Name', 'Grade', 'Year', 'Category', 'Number Tested'):
+            assert c in H, (path, sn, c, hdr)
+        for r in rows:
+            if r is None or r[0] is None:
+                continue
+            cat = r[H['Category']]
+            if cat not in CI:
+                continue
+            if cat != 'All Students' and r[H['Year']] < SCHOOL_SUBGROUP_FROM:
+                continue
+            vals = [r[H[c]] for c in ['Number Tested', 'Mean Scale Score', '# Level 1',
+                                      '# Level 2', '# Level 3', '# Level 4']]
+            if any(v == 's' for v in vals):
+                supp += 1
+                continue
+            if any(not isinstance(v, (int, float)) for v in vals):
+                continue
+            dbn = r[H['DBN']]
+            if dbn not in idx:
+                idx[dbn] = len(idx)
+                names.append(str(r[H['School Name']]).strip())
+                d = dbn[:2]
+                dists.append(DISTRICTS.index(d) if d in DISTRICTS else -1)
+            nt, ms, c1, c2, c3, c4 = vals
+            assert c1 + c2 + c3 + c4 == nt, (dbn, r)
+            out.append([idx[dbn], GI[str(r[H['Grade']])], YI[r[H['Year']]], CI[cat],
+                        int(nt), round(float(ms), 6), int(c1), int(c2), int(c3), int(c4)])
+            kept += 1
     out.sort()
     orphan = sum(1 for d in dists if d < 0)
     assert orphan == 0, '%d schools have a DBN outside districts 1-32' % orphan
-    print('schools: %s rows over %s schools (%s suppressed rows skipped)'
-          % (f'{kept:,}', f'{len(idx):,}', f'{supp:,}'))
+    print('schools: %s rows over %s schools, %s categories (%s suppressed rows skipped)'
+          % (f'{kept:,}', f'{len(idx):,}', len({r[3] for r in out}), f'{supp:,}'))
     return {'dbn': list(idx.keys()), 'name': names, 'dist': dists}, out
 
 

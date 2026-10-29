@@ -3070,6 +3070,8 @@ function initSC(){
   if (!HAS_SCHOOLS) return;
   fillBaselines($('sc-base')); fillBands($('sc-grade'));
   fillMetrics($('sc-metric'), ['prof','l1','l4','mean'], 'prof');
+  fillDims($('sc-dim')); fillCats($('sc-dim'), $('sc-cat'));
+  on($('sc-dim'), () => { fillCats($('sc-dim'), $('sc-cat')); SC.focus = null; renderSC(); });
   fill($('sc-dist'), [{v:'', t:'All districts'}].concat(
     D.districts.map((d,i) => ({ v:i, t:`District ${d} · ${D.districtBoro[i]}` }))), '');
   fill($('sc-min'), [
@@ -3078,12 +3080,13 @@ function initSC(){
     { v:'40', t:'40 or more tested' },
     { v:'80', t:'80 or more tested' },
   ], '20');
-  ['sc-base','sc-grade','sc-dist','sc-metric','sc-min'].forEach(id => on($(id), () => { SC.focus = null; renderSC(); }));
+  ['sc-base','sc-grade','sc-dist','sc-cat','sc-metric','sc-min'].forEach(id => on($(id), () => { SC.focus = null; renderSC(); }));
   $('sc-q').addEventListener('input', () => { SC.focus = null; renderSC(); });
   $('sc-reset').onclick = () => {
     SC.focus = null; $('sc-q').value = '';
     $('sc-dist').value = ''; $('sc-min').value = '20';
     $('sc-base').value = 2023; $('sc-grade').value = 'all'; $('sc-metric').value = 'prof';
+    $('sc-dim').value = 'all'; fillCats($('sc-dim'), $('sc-cat'));
     renderSC();
   };
   $('sc-focus-clear').onclick = () => { SC.focus = null; renderSC(); };
@@ -3094,12 +3097,13 @@ const SC = { focus: null };
 function scRows(){
   const base = +$('sc-base').value, bk = $('sc-grade').value;
   const dsel = $('sc-dist').value, min = +$('sc-min').value;
+  const cat = +$('sc-cat').value;
   const q = $('sc-q').value.trim().toLowerCase();
   const out = [];
   for (const i of ALL_SCH){
     if (dsel !== '' && schDist(i) !== +dsel) continue;
     if (q && !(schName(i).toLowerCase().includes(q) || schDbn(i).toLowerCase().includes(q))) continue;
-    const cur = agg('school',[i],bk,2026,ALLCAT), bse = agg('school',[i],bk,base,ALLCAT);
+    const cur = agg('school',[i],bk,2026,cat), bse = agg('school',[i],bk,base,cat);
     if (!cur) continue;
     if (cur.n < min) continue;
     out.push({ i, cur, bse,
@@ -3117,6 +3121,8 @@ function renderSC(){
   const mk = $('sc-metric').value, M = METRICS[mk];
   const bl = band(bk).label.toLowerCase();
   const dsel = $('sc-dist').value;
+  const cat = +$('sc-cat').value;
+  const gl = groupLabel($('sc-dim'), $('sc-cat'));
   const where = dsel === '' ? 'all districts' : `District ${D.districts[+dsel]}`;
   const rows = scRows();
   const min = +$('sc-min').value;
@@ -3142,7 +3148,7 @@ function renderSC(){
   const median = vals.length ? (vals.length % 2 ? vals[(vals.length-1)/2]
                  : (vals[vals.length/2-1]+vals[vals.length/2])/2) : null;
   $('sc-kpi').innerHTML = [
-    kpi('Schools shown', String(rows.length), '', null, `${where}, ${bl}`, 'n'),
+    kpi('Schools shown', String(rows.length), '', null, `${where}, ${bl}, ${gl.toLowerCase()}`, 'n'),
     kpi(`Median ${M.short.toLowerCase()}`, median==null?'—':f1(median), mk==='mean'?'':'%', null, '2026', 'pair-p'),
     kpi('Students tested', num(tested), '', null, '2026', 'n'),
     kpi(`Moved the right way vs ${base}`, `${up}`, `/${withChange.length}`, null,
@@ -3201,7 +3207,7 @@ function renderSC(){
   $('sc-scatter-lg').innerHTML = D.boros.map(b =>
     `<span><i class="dot" style="background:${BORO_COLOR[b]}"></i>${b}</span>`).join('');
 
-  renderSCFocus(base, bk);
+  renderSCFocus(base, bk, cat);
 
   /* ---- table ---- */
   $('sc-tbltitle').textContent = `School results, 2026, and change from ${base}`;
@@ -3230,12 +3236,15 @@ function renderSC(){
 }
 
 /* one school, set against the district it sits in and the city as a whole */
-function renderSCFocus(base, bk){
+function renderSCFocus(base, bk, cat){
   const host = $('sc-focus');
   if (SC.focus == null){ host.style.display = 'none'; return; }
   host.style.display = '';
   const i = SC.focus, di = schDist(i);
-  const cur = agg('school',[i],bk,2026,ALLCAT), bse = agg('school',[i],bk,base,ALLCAT);
+  const cur = agg('school',[i],bk,2026,cat), bse = agg('school',[i],bk,base,cat);
+  if (!cur){ $('sc-focus-title').textContent = schName(i);
+    $('sc-focus-sub').innerHTML = `${esc(schDbn(i))} &middot; no published result for this group`;
+    $('sc-focus-kpi').innerHTML = ''; return; }
   $('sc-focus-title').textContent = schName(i);
   $('sc-focus-sub').innerHTML = `${esc(schDbn(i))} &middot; District ${D.districts[di]} &middot; ${D.districtBoro[di]} &middot; ${esc(band(bk).label.toLowerCase())}`;
 
@@ -3248,7 +3257,7 @@ function renderSCFocus(base, bk){
   ].join('');
 
   /* school against district and city, on the same grades */
-  const series = (lvl, geos) => MODERN.map(y => { const a = agg(lvl,geos,bk,y,ALLCAT); return a ? a.prof : null; });
+  const series = (lvl, geos) => MODERN.map(y => { const a = agg(lvl,geos,bk,y,cat); return a ? a.prof : null; });
   draw('sc-bench', {
     type:'line',
     data:{ labels: MODERN.map(String), datasets:[
@@ -3261,7 +3270,7 @@ function renderSCFocus(base, bk){
         tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${f1(c.parsed.y)}%`}} } }
   });
 
-  const lv = MODERN.map(y => agg('school',[i],bk,y,ALLCAT));
+  const lv = MODERN.map(y => agg('school',[i],bk,y,cat));
   draw('sc-dist', {
     type:'bar',
     data:{ labels: MODERN.map(String), datasets: ['l1','l2','l3','l4'].map((k,li) => ({
@@ -3271,6 +3280,217 @@ function renderSCFocus(base, bk){
       plugins:{ legend:{position:'bottom'},
         tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${f1(c.parsed.y)}%`}} } }
   });
+}
+
+/* =====================================================================
+   PAGE 10 — SCHOOLS OVERVIEW  (internal builds only)
+
+   The school analogue of the citywide page: the shape of the whole set of
+   schools rather than any one of them. Four questions it answers that the
+   district view cannot. How wide is the spread of schools. How far do schools
+   move year to year, which is the honest scale against which any single
+   school's movement should be read. How much of the variation sits inside a
+   district rather than between districts. And which schools moved furthest,
+   with size shown beside the movement so a 12-point swing in a cohort of 30
+   is not mistaken for a finding.
+   ===================================================================== */
+function initSO(){
+  if (!HAS_SCHOOLS) return;
+  fillBaselines($('so-base')); fillBands($('so-grade'));
+  fillDims($('so-dim')); fillCats($('so-dim'), $('so-cat'));
+  fillMetrics($('so-metric'), ['prof','l1','l4','mean'], 'prof');
+  fill($('so-min'), [
+    { v:'0',  t:'No minimum' },
+    { v:'20', t:'20 or more tested' },
+    { v:'40', t:'40 or more tested' },
+    { v:'80', t:'80 or more tested' },
+  ], '20');
+  on($('so-dim'), () => { fillCats($('so-dim'), $('so-cat')); renderSO(); });
+  ['so-base','so-grade','so-cat','so-metric','so-min'].forEach(id => on($(id), renderSO));
+}
+
+/* quantiles of an already-sorted array */
+function quant(sorted, q){
+  if (!sorted.length) return null;
+  const i = (sorted.length - 1) * q, lo = Math.floor(i), hi = Math.ceil(i);
+  return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi]-sorted[lo]) * (i-lo);
+}
+
+function renderSO(){
+  if (!HAS_SCHOOLS) return;
+  const base = +$('so-base').value, bk = $('so-grade').value, cat = +$('so-cat').value;
+  const mk = $('so-metric').value, M = METRICS[mk], min = +$('so-min').value;
+  const bl = band(bk).label.toLowerCase(), gl = groupLabel($('so-dim'), $('so-cat'));
+
+  const rows = [];
+  for (const i of ALL_SCH){
+    const cur = agg('school',[i],bk,2026,cat), bse = agg('school',[i],bk,base,cat);
+    if (!cur || cur.n < min) continue;
+    rows.push({ i, cur, bse, v: M.get(cur), d: delta(cur, bse, M.get) });
+  }
+  const vals = rows.map(r => r.v).sort((a,b)=>a-b);
+  const moves = rows.filter(r => r.d != null).map(r => r.d).sort((a,b)=>a-b);
+  const city = agg('city',[0],bk,2026,cat);
+
+  $('so-scope').innerHTML =
+    `<b>Read this before using this page.</b> Every figure here counts schools, not students, so it is a different question from the citywide page. `
+    + `A citywide percentage is student-weighted and lands where the large schools are; the median school sits somewhere else, and the gap between the two is itself informative. `
+    + `Schools below <b>${min || 'any'}</b>${min?' tested students':' size'} are excluded, and the spread of movement below is the right scale against which to read any one school's change. `
+    + `${1128 - rows.length} of 1,128 schools are not shown on this selection, either too small or with no published result for this group.`;
+
+  /* ---- KPIs ---- */
+  const med = quant(vals, .5), q1 = quant(vals, .25), q3 = quant(vals, .75);
+  const improved = rows.filter(r => r.d != null && r.d * M.good > 0).length;
+  const withD = rows.filter(r => r.d != null).length;
+  const medMove = quant(moves, .5);
+  $('so-kpi').innerHTML = [
+    kpi('Schools shown', String(rows.length), '', null, `${bl}, ${gl.toLowerCase()}`, 'n'),
+    kpi(`Median school`, med==null?'—':f1(med), mk==='mean'?'':'%', null, `${M.short} in 2026`, 'pair-p'),
+    kpi('Citywide figure', city?f1(M.get(city)):'—', mk==='mean'?'':'%', null, 'student-weighted', 'pair-p'),
+    kpi('Middle half', q1==null?'—':`${f1(q1)}–${f1(q3)}`, '', null, 'the central 50% of schools', 'n'),
+    kpi(`Moved the right way`, `${improved}`, `/${withD}`, null, `vs ${base}`, improved>withD/2?'g':'b'),
+    kpi('Median movement', medMove==null?'—':pp(medMove), 'pp', null, `vs ${base}`, 'n'),
+  ].join('');
+
+  $('so-insight').innerHTML = rows.length
+    ? `Across <b>${rows.length}</b> schools on ${bl}, ${gl.toLowerCase()}, the median school is at <b>${f1(med)}${mk==='mean'?'':'%'}</b> `
+      + (city ? `against a citywide figure of <b>${f1(M.get(city))}${mk==='mean'?'':'%'}</b>. ` : '. ')
+      + `The middle half of schools runs from ${f1(q1)} to ${f1(q3)}, a spread of <b>${f1(q3-q1)}</b> points. `
+      + (moves.length ? `Measured from ${base}, <b>${improved}</b> of ${withD} schools moved in the direction of improvement, and the middle half moved between `
+        + `<b>${pp(quant(moves,.25))}</b> and <b>${pp(quant(moves,.75))}</b> percentage points. `
+        + `Roughly one school in ten moved more than ${f1(Math.max(Math.abs(quant(moves,.1)), Math.abs(quant(moves,.9))))} points, which is the scale to keep in mind before reading any single school's change as a result.` : '')
+    : 'No schools match this selection.';
+
+  /* ---- distribution of schools ---- */
+  const lo = Math.floor(Math.min(...vals)/5)*5, hi = Math.ceil(Math.max(...vals)/5)*5;
+  const bins = []; for (let b = lo; b < hi; b += 5) bins.push(b);
+  const counts = bins.map(b => rows.filter(r => r.v >= b && r.v < b+5).length);
+  $('so-histtitle').textContent = `How schools are spread on ${M.short.toLowerCase()}, 2026`;
+  const cityLine = {
+    id:'cityline',
+    afterDatasetsDraw(c){
+      if (!city) return;
+      const {ctx, chartArea:a, scales:{x}} = c;
+      const v = M.get(city), idx = (v - lo) / 5;
+      const px = a.left + (idx/bins.length) * (a.right-a.left);
+      if (px < a.left || px > a.right) return;
+      ctx.save();
+      ctx.strokeStyle = '#1D242B'; ctx.lineWidth = 1.5; ctx.setLineDash([5,4]);
+      ctx.beginPath(); ctx.moveTo(px, a.top); ctx.lineTo(px, a.bottom); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = '700 10px Hind'; ctx.fillStyle = '#1D242B'; ctx.textAlign = px > (a.left+a.right)/2 ? 'right':'left';
+      ctx.fillText(`citywide ${f1(v)}`, px + (px > (a.left+a.right)/2 ? -6 : 6), a.top + 11);
+      ctx.restore();
+    }
+  };
+  draw('so-hist', {
+    type:'bar',
+    data:{ labels: bins.map(b => `${b}`), datasets:[{ label:'schools', data: counts,
+      backgroundColor: C_PROF, borderWidth:0 }]},
+    options:{ scales:{ x:Object.assign({},gridX,{title:{display:true,text:M.short,font:{size:11,weight:'600'},color:'#7B858B'},ticks:{autoSkip:true,maxTicksLimit:12}}),
+        y:gridY('number of schools',{beginAtZero:true}) },
+      plugins:{ legend:{display:false},
+        tooltip:{callbacks:{ title:c=>`${bins[c[0].dataIndex]} to ${bins[c[0].dataIndex]+5}`,
+                             label:c=>`${c.parsed.y} schools` }} } },
+    plugins:[cityLine]
+  });
+
+  /* ---- distribution of movement ---- */
+  const mlo = Math.floor(Math.min(...moves)/2)*2, mhi = Math.ceil(Math.max(...moves)/2)*2;
+  const mbins = []; for (let b = mlo; b < mhi; b += 2) mbins.push(b);
+  const mcounts = mbins.map(b => moves.filter(v => v >= b && v < b+2).length);
+  $('so-movetitle').textContent = `How far schools moved, ${base} to 2026`;
+  draw('so-move', {
+    type:'bar',
+    data:{ labels: mbins.map(b => `${b}`), datasets:[{ label:'schools', data: mcounts, borderWidth:0,
+      backgroundColor: mbins.map(b => (b + 1) * M.good > 0 ? C_UP : C_DOWN) }]},
+    options:{ scales:{ x:Object.assign({},gridX,{title:{display:true,text:`change in ${M.short.toLowerCase()} (pp)`,font:{size:11,weight:'600'},color:'#7B858B'},ticks:{autoSkip:true,maxTicksLimit:14}}),
+        y:gridY('number of schools',{beginAtZero:true}) },
+      plugins:{ legend:{display:false},
+        tooltip:{callbacks:{ title:c=>`${mbins[c[0].dataIndex]} to ${mbins[c[0].dataIndex]+2}pp`,
+                             label:c=>`${c.parsed.y} schools` }} } }
+  });
+
+  /* ---- spread within each district ---- */
+  const byDist = ALL_DIST.map(di => {
+    const v = rows.filter(r => schDist(r.i) === di).map(r => r.v).sort((a,b)=>a-b);
+    return { di, n:v.length, min:v[0], q1:quant(v,.25), med:quant(v,.5), q3:quant(v,.75), max:v[v.length-1] };
+  }).filter(d => d.n >= 3).sort((a,b) => (b.med - a.med) * M.good);
+  $('so-boxtitle').textContent = `Spread of schools within each district, ${M.short.toLowerCase()}, 2026`;
+  const spread = {
+    id:'spread',
+    afterDatasetsDraw(c){
+      const {ctx, chartArea:a, scales:{x,y}} = c;
+      ctx.save();
+      byDist.forEach((d,i) => {
+        const yy = y.getPixelForValue(i), col = BORO_COLOR[D.districtBoro[d.di]];
+        const X = v => x.getPixelForValue(v);
+        ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(X(d.min), yy); ctx.lineTo(X(d.max), yy); ctx.stroke();
+        ctx.fillStyle = col + '44';
+        ctx.fillRect(X(d.q1), yy-7, X(d.q3)-X(d.q1), 14);
+        ctx.strokeStyle = col; ctx.strokeRect(X(d.q1), yy-7, X(d.q3)-X(d.q1), 14);
+        ctx.beginPath(); ctx.moveTo(X(d.med), yy-9); ctx.lineTo(X(d.med), yy+9);
+        ctx.lineWidth = 2.5; ctx.stroke();
+      });
+      ctx.restore();
+    }
+  };
+  const wrap = document.getElementById('wrap-so-box');
+  if (wrap) wrap.style.height = Math.max(260, byDist.length * 20 + 70) + 'px';
+  draw('so-box', {
+    type:'bar',
+    data:{ labels: byDist.map(d => `D${D.districts[d.di]}`), datasets:[{
+      data: byDist.map(d => [d.min, d.max]), backgroundColor:'rgba(0,0,0,0)', borderWidth:0, barThickness:1 }]},
+    options:{ indexAxis:'y',
+      scales:{ x:gridY(M.short), y:{ grid:{display:false}, ticks:{ font:{size:10}, autoSkip:false } } },
+      plugins:{ legend:{display:false},
+        tooltip:{callbacks:{ title:c=>`District ${D.districts[byDist[c[0].dataIndex].di]}`,
+          label:c=>{ const d = byDist[c.dataIndex];
+            return [`${d.n} schools`, `lowest ${f1(d.min)}`, `middle half ${f1(d.q1)} to ${f1(d.q3)}`,
+                    `median ${f1(d.med)}`, `highest ${f1(d.max)}`]; } }} } },
+    plugins:[spread]
+  });
+  $('so-box-lg').innerHTML = D.boros.map(b =>
+    `<span><i class="dot" style="background:${BORO_COLOR[b]}"></i>${b}</span>`).join('')
+    + `<span class="muted">bar: middle half &middot; line: full range &middot; tick: median</span>`;
+
+  /* ---- biggest movers, with size beside the movement ---- */
+  const movers = rows.filter(r => r.d != null).sort((a,b) => (b.d - a.d) * M.good);
+  $('so-moversub').innerHTML = `The ten furthest in each direction on ${esc(M.short.toLowerCase())}, ${base} to 2026. `
+    + `Students tested is shown because the smallest schools move furthest as a matter of arithmetic.`;
+  const moverRow = r => `<tr><td class="nm" style="white-space:normal;max-width:260px;text-align:left">${esc(schName(r.i))}</td>`
+    + `<td>D${D.districts[schDist(r.i)]}</td><td>${num(r.cur.n)}</td>`
+    + `<td><span class="cell" style="${heat(r.d,10,M.good)}">${pp(r.d)}</span></td></tr>`;
+  $('so-movers').innerHTML =
+    `<thead><tr><th class="nos">School</th><th class="nos">District</th><th class="nos">Tested 2026</th><th class="nos">Change</th></tr></thead><tbody>`
+    + `<tr><td colspan="4" style="text-align:left;font-weight:700;color:${C_UP}">Furthest toward improvement</td></tr>`
+    + movers.slice(0,10).map(moverRow).join('')
+    + `<tr><td colspan="4" style="text-align:left;font-weight:700;color:${C_DOWN}">Furthest against</td></tr>`
+    + movers.slice(-10).reverse().map(moverRow).join('')
+    + `</tbody>`;
+
+  /* ---- schools grouped the way districts are grouped ---- */
+  const groupRows = [];
+  const push = (label, test) => {
+    const g = rows.filter(r => test(schDist(r.i)));
+    if (!g.length) return;
+    const v = g.map(r => r.v).sort((a,b)=>a-b);
+    const dd = g.filter(r => r.d != null);
+    groupRows.push({ label, n:g.length, med:quant(v,.5),
+      up: dd.filter(r => r.d * M.good > 0).length, tot: dd.length });
+  };
+  push('Elementary Phase 1', di => PHASES.elem1.has(distNum(di)));
+  push('Elementary Phase 2', di => PHASES.elem2.has(distNum(di)));
+  if (HAS_VENDORS && HAS_CURR()){
+    for (const c of currRoster(bk)) push(`Curriculum: ${c}`, di => currFor(di, bk).includes(c));
+  }
+  $('so-groups').innerHTML =
+    `<thead><tr><th class="nos">Group</th><th class="nos">Schools</th><th class="nos">Median ${esc(M.short.toLowerCase())}</th><th class="nos">Moved the right way</th></tr></thead><tbody>`
+    + groupRows.map(g => `<tr><td class="nm" style="text-align:left">${esc(g.label)}</td><td>${g.n}</td>`
+        + `<td><span class="cell" style="${shade(g.med, Math.min(...groupRows.map(x=>x.med)), Math.max(...groupRows.map(x=>x.med)), '0,112,185')}">${f1(g.med)}</span></td>`
+        + `<td>${g.up} / ${g.tot}</td></tr>`).join('')
+    + `</tbody>`;
 }
 
 /* =====================================================================
@@ -3443,7 +3663,7 @@ function shadeHex(v, lo, hi, rgb){
 const RENDER = { ov:renderOV, di:renderDI, bo:renderBO, ph:renderPH, sg:renderSG, tf:renderTF };
 if (HAS_VENDORS) RENDER.ve = renderVE;
 if (HAS_REF)     RENDER.pa = renderPA;
-if (HAS_SCHOOLS) RENDER.sc = renderSC;
+if (HAS_SCHOOLS){ RENDER.sc = renderSC; RENDER.so = renderSO; }
 const drawn = new Set();
 
 function show(p){
@@ -3461,7 +3681,7 @@ document.addEventListener('click', e => {
 
 /* re-render the visible page whenever its filters change (handled per page),
    but make sure a page that was never opened renders on first view */
-['ov','di','bo','ph','ve','sg','tf','pa','sc'].forEach(p => {
+['ov','di','bo','ph','ve','sg','tf','pa','sc','so'].forEach(p => {
   document.querySelectorAll(`#pg-${p} select`).forEach(s => s.addEventListener('change', () => { drawn.add(p); }));
 });
 
@@ -3473,9 +3693,9 @@ Object.keys(MARKS).forEach(p => {
 });
 
 initOV(); initDI(); initBO(); initPH(); if (HAS_VENDORS) initVE(); initSG(); initTF();
-if (HAS_SCHOOLS) initSC(); else {
-  document.querySelectorAll('[data-p="sc"]').forEach(n => n.remove());
-  const pg = $('pg-sc'); if (pg) pg.remove();
+if (HAS_SCHOOLS){ initSC(); initSO(); } else {
+  document.querySelectorAll('[data-p="sc"],[data-p="so"]').forEach(n => n.remove());
+  for (const id of ['pg-sc','pg-so']){ const pg = $(id); if (pg) pg.remove(); }
 }
 if (HAS_MAP) initDIMap(); else {
   const w = $('di-map-wrap'); if (w) w.remove();

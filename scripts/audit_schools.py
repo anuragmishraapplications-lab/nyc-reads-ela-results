@@ -18,6 +18,13 @@ R = os.path.join(os.path.dirname(__file__), '..')
 YEARS = [2018, 2019, 2022, 2023, 2024, 2025, 2026]
 GRADES = ['3', '4', '5', '6', '7', '8', 'All Grades']
 DISTRICTS = ['%02d' % d for d in range(1, 33)]
+CATS = ['All Students', 'SWD', 'Not SWD', 'Econ Disadv', 'Not Econ Disadv',
+        'Current ELL', 'Ever ELL', 'Never ELL', 'Asian', 'Black', 'Hispanic',
+        'Multi-Racial', 'Native American', 'White', 'Female', 'Male',
+        'Neither Female nor Male']
+SHEETS = ['ELA - All', 'ELA - SWD', 'ELA - Ethnicity', 'ELA - Gender',
+          'ELA - Econ Status', 'ELA - ELL']
+SUBGROUP_FROM = 2023
 
 FAILS = []
 CHECKED = [0]
@@ -51,33 +58,40 @@ def pp(v):
 def read_source():
     wb = openpyxl.load_workbook(os.path.join(R, 'data', 'school-ela-results-public.xlsx'),
                                 read_only=True, data_only=True)
-    ws = wb['ELA - All']
-    rows = ws.iter_rows(values_only=True)
-    hdr = list(next(rows))
-    H = {h: i for i, h in enumerate(hdr) if h}
     cells, names, skipped = {}, {}, {}
     suppressed = 0
-    for r in rows:
-        if r is None or r[0] is None:
+    for sn in SHEETS:
+        if sn not in wb.sheetnames:
             continue
-        if r[H['Category']] != 'All Students':
-            continue
-        vals = [r[H[c]] for c in ['Number Tested', 'Mean Scale Score', '# Level 1',
-                                  '# Level 2', '# Level 3', '# Level 4']]
-        dbn = r[H['DBN']]
-        names[dbn] = str(r[H['School Name']]).strip()
-        if any(v == 's' for v in vals) or any(not isinstance(v, (int, float)) for v in vals):
-            # A row is unusable if ANY of the six is withheld, not only the
-            # count. NYSED often publishes Number Tested while suppressing the
-            # level breakdown, so counting only `Number Tested == s` understates
-            # how many schools are missing from a district's sum.
-            suppressed += 1
-            skipped.setdefault((dbn[:2], r[H['Year']]), set()).add(dbn)
-            continue
-        nt, ms, c1, c2, c3, c4 = vals
-        assert c1 + c2 + c3 + c4 == nt, (dbn, r)
-        cells[(dbn, str(r[H['Grade']]), r[H['Year']])] = (int(nt), float(ms),
-                                                          int(c1), int(c2), int(c3), int(c4))
+        ws = wb[sn]
+        rows = ws.iter_rows(values_only=True)
+        hdr = list(next(rows))
+        H = {h: i for i, h in enumerate(hdr) if h}
+        for r in rows:
+            if r is None or r[0] is None:
+                continue
+            cat = r[H['Category']]
+            if cat not in CATS:
+                continue
+            if cat != 'All Students' and r[H['Year']] < SUBGROUP_FROM:
+                continue
+            vals = [r[H[c]] for c in ['Number Tested', 'Mean Scale Score', '# Level 1',
+                                      '# Level 2', '# Level 3', '# Level 4']]
+            dbn = r[H['DBN']]
+            names[dbn] = str(r[H['School Name']]).strip()
+            if any(v == 's' for v in vals) or any(not isinstance(v, (int, float)) for v in vals):
+                # A row is unusable if ANY of the six is withheld, not only the
+                # count. NYSED often publishes Number Tested while suppressing
+                # the level breakdown, so counting only `Number Tested == s`
+                # understates how many schools are missing from a district sum.
+                suppressed += 1
+                if cat == 'All Students':
+                    skipped.setdefault((dbn[:2], r[H['Year']]), set()).add(dbn)
+                continue
+            nt, ms, c1, c2, c3, c4 = vals
+            assert c1 + c2 + c3 + c4 == nt, (dbn, r)
+            cells[(dbn, str(r[H['Grade']]), r[H['Year']], cat)] = (
+                int(nt), float(ms), int(c1), int(c2), int(c3), int(c4))
     return cells, names, suppressed, skipped
 
 
@@ -93,7 +107,7 @@ IDX = {d: i for i, d in enumerate(SCH['dbn'])}
 # --------------------------------------------------------------------------
 pay = {}
 for s, g, y, c, n, ms, c1, c2, c3, c4 in P['school']:
-    pay[(SCH['dbn'][s], GRADES[g], YEARS[y])] = (n, ms, c1, c2, c3, c4)
+    pay[(SCH['dbn'][s], GRADES[g], YEARS[y], CATS[c])] = (n, ms, c1, c2, c3, c4)
 
 cmp('payload cell count', len(pay), len(SRC))
 for key, want in SRC.items():
@@ -130,8 +144,8 @@ for g, gi, yi, ci, n, ms, c1, c2, c3, c4 in [(r[0], r[1], r[2], r[3], r[4], r[5]
 recon = {}
 for d in DISTRICTS:
     for y in YEARS:
-        s_sum = sum(v[0] for (dbn, g, yy), v in SRC.items()
-                    if dbn[:2] == d and g == 'All Grades' and yy == y)
+        s_sum = sum(v[0] for (dbn, g, yy, c), v in SRC.items()
+                    if c == 'All Students' and dbn[:2] == d and g == 'All Grades' and yy == y)
         want = dist_rows.get((d, y))
         if want is None:
             continue
@@ -149,8 +163,8 @@ for d in DISTRICTS:
 
 for d in DISTRICTS:
     y = 2026
-    s_sum = sum(v[0] for (dbn, g, yy), v in SRC.items()
-                if dbn[:2] == d and g == 'All Grades' and yy == y)
+    s_sum = sum(v[0] for (dbn, g, yy, c), v in SRC.items()
+                if c == 'All Students' and dbn[:2] == d and g == 'All Grades' and yy == y)
     want = dist_rows.get((d, y))
     if want is None:
         continue
@@ -173,7 +187,7 @@ else:
         wm = 0.0
         found = 0
         for g in grades:
-            v = SRC.get((dbn, g, year))
+            v = SRC.get((dbn, g, year, 'All Students'))
             if not v:
                 continue
             found += 1

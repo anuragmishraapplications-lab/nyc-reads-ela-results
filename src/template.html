@@ -210,12 +210,13 @@ dl.defs dd{margin-left:0;color:#41505C}
     <div class="ni ac" data-p="ov"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>Citywide overview</div>
     <div class="ni" data-p="di"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>District explorer</div>
     <div class="ni" data-p="bo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 3-6 3v15l6-3 6 3 6-3V3l-6 3z"/><path d="M9 3v15M15 6v15"/></svg>Boroughs</div>
+    <div class="ni" data-p="so"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 10 8-5 8 5-8 5z"/><path d="M4 14l8 5 8-5"/></svg>Schools overview</div>
+    <div class="ni" data-p="sc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 10 8-5 8 5-8 5z"/><path d="M4 14l8 5 8-5"/></svg>Schools</div>
     <div class="nl" style="margin-top:16px">Cross-cutting analysis</div>
     <div class="ni" data-p="ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg>NYC Reads phases</div>
     <div class="ni" data-p="ve"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7h-9M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>Providers &amp; curriculum</div>
     <div class="ni" data-p="sg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>Subgroups &amp; gaps</div>
     <div class="ni" data-p="tf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg>Test format</div>
-    <div class="ni" data-p="sc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 10 8-5 8 5-8 5z"/><path d="M4 14l8 5 8-5"/></svg>Schools</div>
     <div class="ni" data-p="pa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/><circle cx="12" cy="12" r="10"/></svg>Participation</div>
   </div>
   <div class="sb-f">
@@ -707,6 +708,66 @@ dl.defs dd{margin-left:0;color:#41505C}
   </div>
 </section>
 
+<!-- ============ SCHOOLS OVERVIEW ============ -->
+<section class="pg" id="pg-so">
+  <div class="ph"><div>
+    <div class="eyebrow">School level</div>
+    <div class="pt">Schools overview</div>
+    <div class="pst">The citywide picture of the district schools reporting grades 3 to 8 ELA: how they are spread, how many moved which way, and how much that differs between districts. Use the School explorer to open an individual school.</div>
+  </div></div>
+
+  <div class="note warn" id="so-scope"></div>
+
+  <div class="fb">
+    <div class="fg"><span class="fl">Baseline</span><select id="so-base"></select></div>
+    <div class="fg"><span class="fl">Grades</span><select id="so-grade"></select></div>
+    <div class="fg"><span class="fl">Group</span><select id="so-dim"></select><select id="so-cat"></select></div>
+    <div class="fg"><span class="fl">Result</span><select id="so-metric"></select></div>
+    <div class="fg"><span class="fl">Min tested</span><select id="so-min"></select></div>
+    <div class="spacer"></div>
+    <a class="btn gh srcbtn" href="https://infohub.nyced.org/reports/academics/test-results" target="_blank" rel="noopener">Source files (NYCPS InfoHub)</a>
+  </div>
+
+  <div class="note info" id="so-insight"></div>
+  <div class="kr" id="so-kpi"></div>
+
+  <div class="g2">
+    <div class="cd">
+      <div class="cdh"><div><div class="ct" id="so-histtitle"></div>
+        <div class="cs">How many schools sit in each band. The marker is the citywide figure on the same grades and group, which is a student-weighted number and so sits where the big schools are, not in the middle of the schools.</div></div>
+        <button class="btn gh" data-png="so-hist">PNG</button></div>
+      <div class="cc" id="wrap-so-hist"><canvas id="so-hist"></canvas></div>
+    </div>
+    <div class="cd">
+      <div class="cdh"><div><div class="ct" id="so-movetitle"></div>
+        <div class="cs">How far schools moved from the baseline. A wide spread means school-level results swing a long way year to year, much of which is the cohort changing rather than the teaching.</div></div>
+        <button class="btn gh" data-png="so-move">PNG</button></div>
+      <div class="cc" id="wrap-so-move"><canvas id="so-move"></canvas></div>
+    </div>
+  </div>
+
+  <div class="cd">
+    <div class="cdh"><div><div class="ct" id="so-boxtitle"></div>
+      <div class="cs">Each district's schools from lowest to highest, with the middle half shaded and the median marked. Districts differ as much inside themselves as they do from one another, which a district average hides.</div></div>
+      <button class="btn gh" data-png="so-box">PNG</button></div>
+    <div class="cc xl" id="wrap-so-box"><canvas id="so-box"></canvas></div>
+    <div class="legend" id="so-box-lg"></div>
+  </div>
+
+  <div class="g2">
+    <div class="cd">
+      <div class="cdh"><div><div class="ct">Schools that moved furthest</div>
+        <div class="cs" id="so-moversub"></div></div></div>
+      <div class="tw"><table id="so-movers"></table></div>
+    </div>
+    <div class="cd">
+      <div class="cdh"><div><div class="ct">Schools grouped by NYC Reads wave and by curriculum</div>
+        <div class="cs">The same schools grouped the two ways this tool groups districts, via the district each school sits in. Schools were not assigned to a wave or a curriculum at random and did not start level, so these describe the groups rather than measure either.</div></div></div>
+      <div class="tw"><table id="so-groups"></table></div>
+    </div>
+  </div>
+</section>
+
 <!-- ============ SCHOOLS ============ -->
 <section class="pg" id="pg-sc">
   <div class="ph"><div>
@@ -721,6 +782,7 @@ dl.defs dd{margin-left:0;color:#41505C}
     <div class="fg"><span class="fl">Baseline</span><select id="sc-base"></select></div>
     <div class="fg"><span class="fl">Grades</span><select id="sc-grade"></select></div>
     <div class="fg"><span class="fl">District</span><select id="sc-dist"></select></div>
+    <div class="fg"><span class="fl">Group</span><select id="sc-dim"></select><select id="sc-cat"></select></div>
     <div class="fg"><span class="fl">Result</span><select id="sc-metric"></select></div>
     <div class="fg"><span class="fl">Min tested</span><select id="sc-min"></select></div>
     <div class="fg"><span class="fl">Search</span><input id="sc-q" type="search" placeholder="school name or DBN" autocomplete="off"></div>
